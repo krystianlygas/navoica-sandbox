@@ -1,7 +1,9 @@
+
 from django.shortcuts import render
 import json
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from func_timeout import func_set_timeout, FunctionTimedOut
 import six
 import logging
 import traceback
@@ -10,22 +12,35 @@ import os
 
 logger = logging.getLogger('sandbox_api') #from LOGGING.loggers in settings.py
 
+
 @csrf_exempt
 def main_page(request):
     if request.method=='POST':
-        # print(request.body)
+
+        @func_set_timeout(15)
+        def exec_wrapper(code, g_dict):
+            exec(code,g_dict)
         try:
             code, g_dict = json.loads(json.loads(request.body))
-            exec(code,g_dict)
-
+            exec_wrapper(code,g_dict)
             g_dict = json_safe(g_dict)
             logger.info(g_dict)
-
             return JsonResponse(g_dict)
 
-        except Exception as err:
+        except FunctionTimedOut as err:
             exc_type, exc_obj, exc_traceback = sys.exc_info()
+            traceback_details = {
+                         'text'    :'The time of code execution is too long',
+                         'type'    : exc_type.__name__,
+                         'message' : str(exc_obj), # or see traceback._some_str()
+                        }
+            response_message = '{0[type]}: {0[text]}'.format(traceback_details)
+            logger.error(response_message)
+            g_dict = {'error_tb':response_message}
+            return JsonResponse(g_dict)
 
+        except SyntaxError as err:
+            exc_type, exc_obj, exc_traceback = sys.exc_info()
             traceback_details = {
                          'text'    : err.text,
                          'type'    : exc_type.__name__,
@@ -36,6 +51,19 @@ def main_page(request):
             logger.error(response_message)
             g_dict = {'error_tb':response_message}
             return JsonResponse(g_dict)
+
+        except Exception as err:
+            exc_type, exc_obj, exc_traceback = sys.exc_info()
+            traceback_details = {
+                         'type'    : exc_type.__name__,
+                         'message' : str(exc_obj), # or see traceback._some_str()
+                        }
+
+            response_message = '{0[type]}: {0[message]}'.format(traceback_details)
+            logger.error(response_message)
+            g_dict = {'error_tb':response_message}
+            return JsonResponse(g_dict)
+
 
     return HttpResponse('Only, post requests available')
 

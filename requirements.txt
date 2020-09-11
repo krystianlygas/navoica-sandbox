@@ -32,3 +32,4 @@ six==1.11.0
 sympy==1.5.1
 tornado==5.0.2            # via matplotlib
 django==1.11.12
+func-timeout==4.3.5
